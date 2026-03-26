@@ -1,0 +1,2130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Presidio JS — PII Scanner (Standalone)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+  :root {
+    --ink: #0a0a0a;
+    --paper: #f4f1eb;
+    --paper-warm: #ebe7df;
+    --red: #c0392b;
+    --red-soft: #e74c3c22;
+    --green: #1a7a4c;
+    --green-soft: #1a7a4c18;
+    --amber: #b7791f;
+    --amber-soft: #b7791f18;
+    --blue: #2c5aa0;
+    --blue-soft: #2c5aa01a;
+    --mono: 'IBM Plex Mono', monospace;
+    --serif: 'Instrument Serif', Georgia, serif;
+    --border: 1px solid #0a0a0a22;
+    --radius: 3px;
+  }
+
+  html { font-size: 16px; height: 100%; }
+
+  body {
+    font-family: var(--mono);
+    background: var(--paper);
+    color: var(--ink);
+    height: 100%;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  .container {
+    display: flex; flex-direction: column; height: 100vh; padding: 0.75rem 1rem 0;
+  }
+
+  header {
+    margin-bottom: 0.5rem; padding-bottom: 0.5rem; border-bottom: 2px solid var(--ink);
+    display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;
+  }
+  .logo { font-family: var(--serif); font-size: 1.8rem; line-height: 1; letter-spacing: -0.02em; }
+  .logo em { font-style: italic; color: var(--red); }
+  .tagline { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.12em; color: #0a0a0a88; }
+
+  .mode-bar {
+    display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;
+    padding: 0.5rem 0.75rem; background: var(--paper-warm); border: var(--border); border-radius: var(--radius);
+    flex-wrap: wrap; flex-shrink: 0;
+  }
+  .mode-bar .mode-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em; color: #0a0a0a77; margin-right: 0.5rem; }
+
+  .mode-btn {
+    font-family: var(--mono); font-size: 0.8rem; font-weight: 500; text-transform: uppercase;
+    letter-spacing: 0.06em; padding: 0.4rem 0.9rem; border: 1px solid #0a0a0a33;
+    border-radius: var(--radius); background: white; color: var(--ink); cursor: pointer;
+    transition: all 0.15s;
+  }
+  .mode-btn:hover { border-color: var(--ink); }
+  .mode-btn.active { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+
+  .mode-note { font-size: 0.75rem; color: #0a0a0a66; margin-left: auto; font-style: italic; }
+
+  .toolbar {
+    display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem; flex-wrap: wrap; flex-shrink: 0;
+  }
+
+  .scan-btn {
+    display: inline-flex; align-items: center; gap: 0.6rem; padding: 0.75rem 1.8rem;
+    font-family: var(--mono); font-size: 0.85rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.1em; background: var(--ink); color: var(--paper); border: none;
+    border-radius: var(--radius); cursor: pointer; transition: all 0.15s; flex-shrink: 0;
+  }
+  .scan-btn:hover { background: #222; transform: translateY(-1px); }
+  .scan-btn:active { transform: translateY(0); }
+  .scan-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+  .three-col {
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem;
+    flex: 1; min-height: 0; margin-bottom: 0.5rem;
+  }
+  @media (max-width: 1000px) { .three-col { grid-template-columns: 1fr; } }
+
+  .three-col .panel { display: flex; flex-direction: column; min-height: 0; }
+  .three-col .panel-body { flex: 1; overflow-y: auto; min-height: 0; }
+
+  .section-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.14em; color: #0a0a0a77; margin-bottom: 0.5rem; display: block; }
+
+  textarea {
+    width: 100%; flex: 1; min-height: 0; height: 100%;
+    padding: 1rem; font-family: var(--mono); font-size: 0.9rem;
+    line-height: 1.7; border: none; border-radius: 0; background: white;
+    color: var(--ink); resize: none; outline: none;
+  }
+  .highlighted-view {
+    padding: 1rem; font-family: var(--mono); font-size: 0.9rem;
+    line-height: 1.7; white-space: pre-wrap; word-break: break-word;
+    min-height: 0; flex: 1; overflow-y: auto; cursor: default;
+  }
+  .highlighted-view .pii-hl {
+    position: relative; border-bottom: 2px solid var(--red); background: var(--red-soft);
+    padding: 0 1px; border-radius: 2px; cursor: default;
+  }
+  .highlighted-view .pii-hl::after {
+    content: attr(data-type); position: absolute; bottom: calc(100% + 2px); left: 0;
+    font-size: 0.65rem; font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.08em;
+    background: var(--ink); color: var(--paper); padding: 0.15rem 0.4rem; border-radius: 2px;
+    white-space: nowrap; opacity: 0; transform: translateY(4px); transition: all 0.12s;
+    pointer-events: none; z-index: 10;
+  }
+  .highlighted-view .pii-hl:hover::after, .highlighted-view .pii-hl.hover::after { opacity: 1; transform: translateY(0); }
+  .highlighted-view .pii-hl:hover, .highlighted-view .pii-hl.hover { filter: brightness(0.88); }
+  .highlighted-view .pii-hl[data-type="EMAIL_ADDRESS"] { background: var(--blue-soft); border-bottom-color: var(--blue); }
+  .highlighted-view .pii-hl[data-type="PHONE_NUMBER"] { background: var(--green-soft); border-bottom-color: var(--green); }
+  .highlighted-view .pii-hl[data-type="PERSON"] { background: var(--red-soft); border-bottom-color: var(--red); }
+  .highlighted-view .pii-hl[data-type="LOCATION"] { background: var(--green-soft); border-bottom-color: var(--green); }
+  .highlighted-view .pii-hl[data-type="ORGANIZATION"] { background: var(--blue-soft); border-bottom-color: var(--blue); }
+  .highlighted-view .pii-hl[data-type="CREDIT_CARD"] { background: var(--amber-soft); border-bottom-color: var(--amber); }
+  .highlighted-view .pii-hl[data-type="IBAN_CODE"] { background: var(--amber-soft); border-bottom-color: var(--amber); }
+  .highlighted-view .pii-hl[data-type="PASSPORT"] { background: var(--amber-soft); border-bottom-color: var(--amber); }
+  .highlighted-view .pii-hl[data-type="NATIONAL_ID"] { background: var(--amber-soft); border-bottom-color: var(--amber); }
+  .highlighted-view .pii-hl[data-type="IP_ADDRESS"] { background: #6c3d8f18; border-bottom-color: #6c3d8f; }
+  .highlighted-view .pii-hl[data-type="NATIONALITY"] { background: #6c3d8f18; border-bottom-color: #6c3d8f; }
+  .highlighted-view .pii-hl[data-type="URL"] { background: var(--blue-soft); border-bottom-color: var(--blue); }
+  .highlighted-view .pii-hl[data-type="US_SSN"] { background: var(--red-soft); border-bottom-color: var(--red); }
+  .highlighted-view .pii-hl[data-type="CRYPTO"] { background: var(--amber-soft); border-bottom-color: var(--amber); }
+  .highlighted-view .pii-hl[data-type="CH_AHV"] { background: var(--red-soft); border-bottom-color: var(--red); }
+  .highlighted-view .pii-hl[data-type="CH_UID"] { background: var(--blue-soft); border-bottom-color: var(--blue); }
+  .highlighted-view .pii-hl[data-type="OTHER"] { background: #0a0a0a12; border-bottom-color: #555; }
+
+  .edit-btn {
+    position: absolute; top: 0.4rem; right: 0.4rem; z-index: 5;
+    font-family: var(--mono); font-size: 0.7rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.06em; padding: 0.3rem 0.7rem; background: var(--paper-warm);
+    border: var(--border); border-radius: var(--radius); cursor: pointer; opacity: 0.7;
+    transition: opacity 0.15s;
+  }
+  .edit-btn:hover { opacity: 1; }
+
+  .copy-btn {
+    margin-left: auto; font-family: var(--mono); font-size: 0.72rem; font-weight: 500;
+    padding: 0.25rem 0.7rem; background: transparent; border: 1px solid #0a0a0a33;
+    border-radius: var(--radius); cursor: pointer; transition: all 0.15s; color: var(--ink);
+  }
+  .copy-btn:hover { background: var(--ink); color: var(--paper); }
+
+  .deanon-btn {
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    font-family: var(--mono); font-size: 0.82rem; font-weight: 500; text-transform: uppercase;
+    letter-spacing: 0.06em; padding: 0.4rem 0.9rem; border: 1px solid #0a0a0a33;
+    border-radius: var(--radius); background: white; color: var(--ink); cursor: pointer;
+    transition: all 0.15s; flex-shrink: 0;
+  }
+  .deanon-btn:hover { border-color: var(--ink); }
+  .deanon-btn.active { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+
+  .back-btn {
+    display: none; align-items: center; gap: 0.3rem;
+    font-family: var(--mono); font-size: 0.82rem; font-weight: 500;
+    padding: 0.4rem 0.9rem; border: 1px solid #0a0a0a33;
+    border-radius: var(--radius); background: white; color: var(--ink); cursor: pointer;
+    transition: all 0.15s; flex-shrink: 0;
+  }
+  .back-btn:hover { border-color: var(--ink); }
+  .back-btn svg { width: 14px; height: 14px; }
+
+  .deanon-output { font-size: 0.9rem; line-height: 1.8; word-break: break-word; white-space: pre-wrap; }
+  .deanon-output .restored { background: var(--green-soft); border-bottom: 2px solid var(--green); padding: 0 2px; border-radius: 2px; }
+
+  .entity-item.hover { background: var(--paper-warm); }
+  textarea.has-highlights { color: var(--ink); }
+
+  /* Selection popup */
+  .select-popup {
+    display: none; position: fixed; z-index: 500;
+    background: var(--ink); color: var(--paper); border-radius: var(--radius);
+    padding: 0.5rem; box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+    animation: popIn 0.12s ease;
+  }
+  .select-popup.open { display: flex; flex-wrap: wrap; gap: 0.35rem; max-width: 460px; }
+  @keyframes popIn { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: none; } }
+  .select-popup::after {
+    content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
+    border: 6px solid transparent; border-top-color: var(--ink);
+  }
+  .popup-type-btn {
+    font-family: var(--mono); font-size: 0.82rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.04em; padding: 0.4rem 0.75rem; border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 3px; background: transparent; color: var(--paper); cursor: pointer;
+    transition: background 0.1s; white-space: nowrap;
+  }
+  .popup-type-btn:hover { background: rgba(255,255,255,0.15); }
+  .popup-label {
+    font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.1em; opacity: 0.5;
+    padding: 0.3rem 0.5rem; width: 100%;
+  }
+
+  .results-wrapper { display: none; flex-shrink: 0; }
+  .results-wrapper.visible { display: block; }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+
+  .panel { border: var(--border); border-radius: var(--radius); background: white; overflow: hidden; min-height: 0; }
+  .panel-header {
+    padding: 0.65rem 1rem; background: var(--paper-warm); border-bottom: var(--border);
+    font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.12em; color: #0a0a0a88;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .count-badge { background: var(--ink); color: var(--paper); padding: 0.15rem 0.55rem; border-radius: 2px; font-size: 0.72rem; font-weight: 600; }
+  .panel-body { padding: 1rem; overflow-y: auto; }
+
+
+  .entity-list { list-style: none; }
+  .entity-item {
+    display: grid; grid-template-columns: auto auto 1fr auto; gap: 0.75rem; align-items: center;
+    padding: 0.7rem 0; border-bottom: 1px solid #0a0a0a0a; font-size: 0.95rem; animation: slideIn 0.25s ease;
+  }
+  .entity-check {
+    width: 18px; height: 18px; accent-color: var(--ink); cursor: pointer; margin: 0;
+  }
+  .entity-item.excluded { opacity: 0.4; }
+  .entity-item.excluded .entity-text { text-decoration: line-through; }
+  .entity-count {
+    font-size: 0.75rem; font-weight: 600; background: var(--ink); color: var(--paper);
+    border-radius: 50%; min-width: 1.3rem; height: 1.3rem; display: inline-flex;
+    align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .entity-item:last-child { border-bottom: none; }
+  @keyframes slideIn { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: translateX(0); } }
+
+  .entity-tag {
+    font-size: 0.82rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;
+    padding: 0.25rem 0.6rem; border-radius: 3px; white-space: nowrap; background: #0a0a0a0d; color: #555;
+  }
+  .entity-tag[data-type="EMAIL_ADDRESS"] { background: var(--blue-soft); color: var(--blue); }
+  .entity-tag[data-type="US_SSN"] { background: var(--red-soft); color: var(--red); }
+  .entity-tag[data-type="PHONE_NUMBER"] { background: var(--green-soft); color: var(--green); }
+  .entity-tag[data-type="CREDIT_CARD"] { background: var(--amber-soft); color: var(--amber); }
+  .entity-tag[data-type="IP_ADDRESS"] { background: #6c3d8f18; color: #6c3d8f; }
+  .entity-tag[data-type="PERSON"] { background: var(--red-soft); color: var(--red); }
+  .entity-tag[data-type="LOCATION"] { background: var(--green-soft); color: var(--green); }
+  .entity-tag[data-type="ORGANIZATION"] { background: var(--blue-soft); color: var(--blue); }
+  .entity-tag[data-type="PASSPORT"] { background: var(--amber-soft); color: var(--amber); }
+  .entity-tag[data-type="NATIONAL_ID"] { background: var(--amber-soft); color: var(--amber); }
+  .entity-tag[data-type="NATIONALITY"] { background: #6c3d8f18; color: #6c3d8f; }
+  .entity-tag[data-type="CH_AHV"] { background: var(--red-soft); color: var(--red); }
+  .entity-tag[data-type="CH_UID"] { background: var(--blue-soft); color: var(--blue); }
+  .entity-tag[data-type="OTHER"] { background: #0a0a0a0d; color: #555; }
+
+  .entity-text { font-family: var(--mono); font-size: 0.92rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .entity-score-wrap {
+    display: flex; align-items: center; gap: 0.4rem; min-width: 5.5rem; justify-content: flex-end;
+  }
+  .entity-score-bar {
+    width: 2.5rem; height: 5px; background: #0a0a0a0d; border-radius: 3px; overflow: hidden;
+  }
+  .entity-score-fill {
+    height: 100%; border-radius: 3px; transition: width 0.3s ease;
+  }
+  .entity-score { font-size: 0.68rem; color: #0a0a0a66; font-variant-numeric: tabular-nums; min-width: 2rem; text-align: right; }
+
+  .confidence-slider-wrap {
+    display: flex; align-items: center; gap: 1rem; padding: 0.5rem 1rem;
+    background: var(--paper-warm); border: var(--border); border-radius: var(--radius);
+    font-size: 0.85rem;
+  }
+  .confidence-slider-wrap label { white-space: nowrap; font-weight: 500; }
+  .confidence-slider-wrap input[type="range"] {
+    flex: 1; accent-color: var(--ink); height: 6px; cursor: pointer;
+  }
+  .confidence-slider-wrap .slider-value {
+    font-variant-numeric: tabular-nums; min-width: 2.5rem; text-align: right; font-weight: 600;
+  }
+
+  .anon-output { font-size: 0.9rem; line-height: 1.8; word-break: break-word; white-space: pre-wrap; }
+  .redacted { background: var(--ink); color: var(--paper); padding: 0.15rem 0.5rem; border-radius: 3px; font-size: 0.8rem; font-weight: 500; letter-spacing: 0.04em; cursor: default; transition: background 0.15s; }
+  .redacted[data-dk] { cursor: pointer; }
+  .redacted[data-dk]:hover { background: var(--accent, #c05); }
+
+  .stats-bar { display: flex; gap: 2rem; padding: 0.4rem 0; border-top: 1px solid var(--ink); font-size: 0.68rem; }
+  .stat-item { display: flex; align-items: baseline; gap: 0.4rem; }
+  .stat-value { font-weight: 600; font-size: 1.1rem; font-family: var(--serif); }
+  .stat-label { text-transform: uppercase; letter-spacing: 0.08em; color: #0a0a0a77; font-size: 0.72rem; }
+
+  .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--paper); border-top-color: transparent; border-radius: 50%; animation: spin 0.6s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .panel-body::-webkit-scrollbar { width: 4px; }
+  .panel-body::-webkit-scrollbar-track { background: transparent; }
+  .panel-body::-webkit-scrollbar-thumb { background: #0a0a0a22; border-radius: 2px; }
+
+  /* Settings button */
+  .settings-btn {
+    display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.5rem 0.9rem;
+    font-family: var(--mono); font-size: 0.72rem; font-weight: 500; text-transform: uppercase;
+    letter-spacing: 0.06em; background: white; color: var(--ink); border: var(--border);
+    border-radius: var(--radius); cursor: pointer; transition: all 0.15s; flex-shrink: 0;
+  }
+  .settings-btn:hover { border-color: var(--ink); }
+  .settings-btn svg { width: 14px; height: 14px; }
+
+  /* Modal overlay */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(10,10,10,0.4);
+    z-index: 1000; align-items: center; justify-content: center;
+    animation: fadeIn 0.15s ease;
+  }
+  .modal-overlay.open { display: flex; }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+  .modal {
+    background: var(--paper); border: 2px solid var(--ink); border-radius: var(--radius);
+    width: 520px; max-width: 92vw; max-height: 80vh; display: flex; flex-direction: column;
+    animation: modalIn 0.2s ease;
+  }
+  @keyframes modalIn { from { opacity: 0; transform: scale(0.96) translateY(8px); } to { opacity: 1; transform: none; } }
+
+  .modal-header {
+    padding: 1rem 1.25rem; border-bottom: var(--border); display: flex;
+    justify-content: space-between; align-items: center;
+  }
+  .modal-header h2 {
+    font-family: var(--serif); font-size: 1.3rem; font-weight: 400;
+  }
+  .modal-close {
+    background: none; border: none; font-size: 1.2rem; cursor: pointer;
+    color: var(--ink); opacity: 0.5; transition: opacity 0.15s; padding: 0.25rem;
+  }
+  .modal-close:hover { opacity: 1; }
+
+  .modal-body {
+    padding: 1.25rem; overflow-y: auto; flex: 1;
+  }
+
+  .entity-group-title {
+    font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.12em;
+    color: #0a0a0a66; margin-bottom: 0.5rem; margin-top: 1rem; padding-bottom: 0.3rem;
+    border-bottom: 1px solid #0a0a0a0d;
+  }
+  .entity-group-title:first-child { margin-top: 0; }
+
+  .entity-toggle {
+    display: flex; align-items: center; gap: 0.6rem; padding: 0.4rem 0;
+    font-size: 0.8rem; cursor: pointer;
+  }
+  .entity-toggle input { accent-color: var(--ink); width: 14px; height: 14px; cursor: pointer; }
+  .entity-toggle-label { font-weight: 500; }
+  .entity-toggle-desc { font-size: 0.68rem; color: #0a0a0a77; margin-left: auto; }
+
+  .modal-footer {
+    padding: 0.75rem 1.25rem; border-top: var(--border); display: flex;
+    justify-content: space-between; align-items: center;
+  }
+  .modal-footer-links { display: flex; gap: 1rem; }
+  .modal-link {
+    font-family: var(--mono); font-size: 0.68rem; color: var(--ink); opacity: 0.5;
+    text-decoration: underline; cursor: pointer; background: none; border: none; padding: 0;
+  }
+  .modal-link:hover { opacity: 1; }
+  .modal-done {
+    font-family: var(--mono); font-size: 0.72rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.08em; padding: 0.5rem 1.2rem; background: var(--ink); color: var(--paper);
+    border: none; border-radius: var(--radius); cursor: pointer; transition: background 0.15s;
+  }
+  .modal-done:hover { background: #222; }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <div class="logo">Presidio<em>JS</em></div>
+    <div class="tagline">Client-side PII detection &amp; anonymization</div>
+  </header>
+
+  <div class="mode-bar">
+    <span class="mode-label">Engine</span>
+    <button class="mode-btn active" data-mode="ner">NER</button>
+    <span class="mode-note" id="modeNote">NER mode — ~67 MB model, detects names/places/orgs</span>
+  </div>
+
+  <div class="toolbar">
+    <button class="scan-btn" id="scanBtn">Scan for PII →</button>
+    <button class="settings-btn" id="settingsBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      Entities
+    </button>
+    <div class="confidence-slider-wrap" style="flex:1">
+      <label for="confidenceSlider">Min. Confidence</label>
+      <input type="range" id="confidenceSlider" min="0" max="100" value="0" step="5">
+      <span class="slider-value" id="confidenceValue">0%</span>
+    </div>
+    <button class="deanon-btn" id="deanonBtn" title="Paste LLM response and restore original values">↩ Deanonymize</button>
+    <button class="back-btn" id="backBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg> Back to scan</button>
+  </div>
+
+  <div class="three-col">
+    <div class="panel">
+      <div class="panel-header">Input Text</div>
+      <div class="panel-body" id="inputPanelBody" style="padding:0; position:relative">
+        <textarea id="inputText">Dear Mr. John Smith,
+
+Your account (john.smith@acmecorp.com) has been flagged. Please verify your identity using your Social Security Number 539-72-4891 or call us at (415) 555-0198.
+
+Your last payment of $2,450 was made with card 4532-0151-1283-0366 from IP 192.168.42.7 on 2024-03-15.
+
+IBAN: GB29 NWBK 6016 1331 9268 19
+Wallet: 0x742d35Cc6634C0532925a3b844Bc9e7595f2bD68</textarea>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <span>Detected Entities</span>
+        <span class="count-badge" id="entityCount">0</span>
+      </div>
+      <div class="panel-body">
+        <ul class="entity-list" id="entityList">
+          <li class="empty-state">Run a scan to detect PII</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">Anonymized Output
+        <button class="copy-btn" id="copyAnon" title="Copy anonymized text">📋 Copy</button>
+      </div>
+      <div class="panel-body">
+        <div class="anon-output" id="anonOutput"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="results-wrapper" id="resultsWrapper">
+    <div class="stats-bar">
+      <div class="stat-item"><span class="stat-value" id="statEntities">0</span><span class="stat-label">entities found</span></div>
+      <div class="stat-item"><span class="stat-value" id="statTypes">0</span><span class="stat-label">unique types</span></div>
+      <div class="stat-item"><span class="stat-value" id="statTime">0</span><span class="stat-label">ms elapsed</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="settingsModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>Entity Types</h2>
+      <button class="modal-close" id="modalClose">&times;</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+    <div class="modal-footer">
+      <div class="modal-footer-links">
+        <button class="modal-link" id="selectAll">Select all</button>
+        <button class="modal-link" id="selectNone">Deselect all</button>
+      </div>
+      <button class="modal-done" id="modalDone">Done</button>
+    </div>
+  </div>
+</div>
+
+<div class="select-popup" id="selectPopup"></div>
+
+<script type="importmap">
+  { "imports": { "@huggingface/transformers": "https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.0.0-next.8/dist/transformers.min.js" } }
+</script>
+<script type="module">
+  // ============================================================
+  // INLINED: chunk-G5LTOJJD.js (Anonymizer Engine + Operators)
+  // ============================================================
+
+  // src/anonymizer/operators/replace.ts
+  var ReplaceOperator = class {
+    operatorName = "replace";
+    operate(text, params) {
+      const newValue = params.newValue;
+      const entityType = params.entityType;
+      return newValue ?? `<${entityType ?? "REDACTED"}>`;
+    }
+  };
+
+  // src/anonymizer/operators/redact.ts
+  var RedactOperator = class {
+    operatorName = "redact";
+    operate(_text, _params) {
+      return "";
+    }
+  };
+
+  // src/anonymizer/operators/mask.ts
+  var MaskOperator = class {
+    operatorName = "mask";
+    operate(text, params) {
+      const maskingChar = params.maskingChar ?? "*";
+      const charsToMask = params.charsToMask ?? text.length;
+      const fromEnd = params.fromEnd ?? false;
+      const count = Math.min(charsToMask, text.length);
+      if (fromEnd) {
+        return text.slice(0, text.length - count) + maskingChar.repeat(count);
+      }
+      return maskingChar.repeat(count) + text.slice(count);
+    }
+  };
+
+  // src/anonymizer/operators/hash.ts
+  var HashOperator = class {
+    operatorName = "hash";
+    async operate(text, params) {
+      const algorithm = params.hashType ?? "SHA-256";
+      if (typeof globalThis.crypto?.subtle?.digest === "function") {
+        const data = new TextEncoder().encode(text);
+        const hashBuffer = await crypto.subtle.digest(algorithm, data);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+      }
+      let hash = 0;
+      for (let i = 0; i < text.length; i++) {
+        const char = text.charCodeAt(i);
+        hash = (hash << 5) - hash + char | 0;
+      }
+      return Math.abs(hash).toString(16).padStart(8, "0");
+    }
+  };
+
+  // src/anonymizer/operators/encrypt.ts
+  var EncryptOperator = class {
+    operatorName = "encrypt";
+    async operate(text, params) {
+      const keyHex = params.key;
+      if (!keyHex) throw new Error('EncryptOperator requires a "key" parameter');
+      const keyBytes = hexToBytes(keyHex);
+      const cryptoKey = await crypto.subtle.importKey(
+        "raw",
+        keyBytes.buffer,
+        { name: "AES-GCM" },
+        false,
+        ["encrypt"]
+      );
+      const iv = crypto.getRandomValues(new Uint8Array(12));
+      const data = new TextEncoder().encode(text);
+      const encrypted = await crypto.subtle.encrypt(
+        { name: "AES-GCM", iv },
+        cryptoKey,
+        data.buffer
+      );
+      const ivHex = bytesToHex(iv);
+      const ctHex = bytesToHex(new Uint8Array(encrypted));
+      return `${ivHex}:${ctHex}`;
+    }
+  };
+  function hexToBytes(hex) {
+    const bytes = new Uint8Array(hex.length / 2);
+    for (let i = 0; i < bytes.length; i++) {
+      bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+    }
+    return bytes;
+  }
+  function bytesToHex(bytes) {
+    return Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join("");
+  }
+
+  // src/anonymizer/operators/keep.ts
+  var KeepOperator = class {
+    operatorName = "keep";
+    operate(text, _params) {
+      return text;
+    }
+  };
+
+  // src/anonymizer/anonymizer-engine.ts
+  var AnonymizerEngine = class {
+    operators;
+    constructor() {
+      this.operators = new Map();
+      const defaults = [
+        new ReplaceOperator(),
+        new RedactOperator(),
+        new MaskOperator(),
+        new HashOperator(),
+        new EncryptOperator(),
+        new KeepOperator()
+      ];
+      for (const op of defaults) {
+        this.operators.set(op.operatorName, op);
+      }
+    }
+    addOperator(operator) {
+      this.operators.set(operator.operatorName, operator);
+    }
+    async anonymize(text, analyzerResults, operatorConfigs) {
+      const sorted = [...analyzerResults].sort((a, b) => b.start - a.start);
+      let result = text;
+      const items = [];
+      for (const ar of sorted) {
+        const config = operatorConfigs?.[ar.entityType] ?? operatorConfigs?.["DEFAULT"] ?? { type: "replace" };
+        const operator = this.operators.get(config.type);
+        if (!operator) {
+          throw new Error(`Unknown operator: ${config.type}`);
+        }
+        const original = result.slice(ar.start, ar.end);
+        const params = {
+          ...config.params ?? {},
+          entityType: ar.entityType
+        };
+        const replacement = await operator.operate(original, params);
+        result = result.slice(0, ar.start) + replacement + result.slice(ar.end);
+        items.push({
+          start: ar.start,
+          end: ar.start + replacement.length,
+          entityType: ar.entityType,
+          operator: config.type,
+          text: replacement
+        });
+      }
+      return { text: result, items: items.reverse() };
+    }
+  };
+
+  // ============================================================
+  // INLINED: chunk-ADRGCLEA.js (NLP Engines)
+  // ============================================================
+
+  // src/nlp/null-nlp-engine.ts
+  var NullNlpEngine = class {
+    async process(text, language) {
+      const tokens = [];
+      const tokenSpans = [];
+      const regex = /\S+/g;
+      let match;
+      while ((match = regex.exec(text)) !== null) {
+        tokens.push(match[0]);
+        tokenSpans.push({ start: match.index, end: match.index + match[0].length });
+      }
+      return { entities: [], tokens, tokenSpans, language };
+    }
+    isLoaded() {
+      return true;
+    }
+  };
+
+  // src/nlp/transformers-nlp-engine.ts
+  var TransformersNlpEngine = class {
+    pipeline = null;
+    tokenizer = null;
+    loading = null;
+    modelId;
+    quantized;
+    device;
+    constructor(opts = {}) {
+      this.modelId = opts.modelId ?? "Xenova/distilbert-base-multilingual-cased-ner-hrl";
+      this.quantized = opts.quantized ?? true;
+      this.device = opts.device ?? "wasm";
+    }
+    async load() {
+      if (this.pipeline) return;
+      if (this.loading) return this.loading;
+      this.loading = (async () => {
+        const transformers = await import('@huggingface/transformers');
+        this.pipeline = await transformers.pipeline("token-classification", this.modelId, {
+          quantized: this.quantized,
+          device: this.device
+        });
+        this.tokenizer = this.pipeline.tokenizer;
+      })();
+      return this.loading;
+    }
+    async process(text, language) {
+      await this.load();
+      const MAX_CHARS = 1500;
+      const OVERLAP_CHARS = 200;
+      let allEntities = [];
+      if (text.length <= MAX_CHARS) {
+        const raw = await this.runChunk(text, 0);
+        allEntities = this.aggregateBioTags(raw, text);
+      } else {
+        let offset = 0;
+        while (offset < text.length) {
+          const end = Math.min(offset + MAX_CHARS, text.length);
+          const chunk = text.slice(offset, end);
+          const raw = await this.runChunk(chunk, offset);
+          const chunkEntities = this.aggregateBioTags(raw, text);
+          for (const e of chunkEntities) {
+            const dominated = allEntities.some(
+              (existing) => existing.start <= e.start && existing.end >= e.end
+            );
+            if (!dominated) {
+              allEntities = allEntities.filter(
+                (existing) => !(e.start <= existing.start && e.end >= existing.end)
+              );
+              allEntities.push(e);
+            }
+          }
+          if (end >= text.length) break;
+          offset += MAX_CHARS - OVERLAP_CHARS;
+        }
+      }
+      const tokens = [];
+      const tokenSpans = [];
+      const tokenRegex = /\S+/g;
+      let match;
+      while ((match = tokenRegex.exec(text)) !== null) {
+        tokens.push(match[0]);
+        tokenSpans.push({ start: match.index, end: match.index + match[0].length });
+      }
+      return { entities: allEntities, tokens, tokenSpans, language };
+    }
+    async runChunk(chunk, charOffset) {
+      const raw = await this.pipeline(chunk, {
+        ignore_labels: ["O"]
+      });
+      let searchFrom = 0;
+      return raw.map((r) => {
+        if (r.start != null && r.end != null && r.end > 0) {
+          searchFrom = r.end;
+          return { ...r, start: r.start + charOffset, end: r.end + charOffset };
+        }
+        let word = r.word.replace(/^##/, "");
+        const idx = chunk.indexOf(word, searchFrom);
+        if (idx >= 0) {
+          searchFrom = idx + word.length;
+          return { ...r, start: idx + charOffset, end: idx + word.length + charOffset };
+        }
+        const lowerChunk = chunk.toLowerCase();
+        const lowerIdx = lowerChunk.indexOf(word.toLowerCase(), searchFrom);
+        if (lowerIdx >= 0) {
+          searchFrom = lowerIdx + word.length;
+          return { ...r, start: lowerIdx + charOffset, end: lowerIdx + word.length + charOffset };
+        }
+        return { ...r, start: searchFrom + charOffset, end: searchFrom + charOffset };
+      });
+    }
+    aggregateBioTags(results, text) {
+      const entities = [];
+      let current = null;
+      for (const r of results) {
+        if (r.entity_group) {
+          entities.push({
+            text: text.slice(r.start, r.end),
+            label: r.entity_group,
+            start: r.start,
+            end: r.end,
+            score: r.score
+          });
+          continue;
+        }
+        const tag = r.entity;
+        const dashIdx = tag.indexOf("-");
+        let prefix;
+        let label;
+        if (dashIdx >= 0 && dashIdx <= 2) {
+          prefix = tag.slice(0, dashIdx);
+          label = tag.slice(dashIdx + 1);
+        } else {
+          prefix = "B";
+          label = tag;
+        }
+        if (prefix === "B" || prefix === "S") {
+          if (current) {
+            entities.push(this.finalizeEntity(current, text));
+          }
+          current = { label, start: r.start, end: r.end, scores: [r.score] };
+        } else if ((prefix === "I" || prefix === "E") && current && current.label === label) {
+          current.end = r.end;
+          current.scores.push(r.score);
+        } else {
+          if (current) {
+            entities.push(this.finalizeEntity(current, text));
+            current = null;
+          }
+        }
+      }
+      if (current) {
+        entities.push(this.finalizeEntity(current, text));
+      }
+      return entities;
+    }
+    finalizeEntity(c, text) {
+      const avgScore = c.scores.reduce((a, b) => a + b, 0) / c.scores.length;
+      return {
+        text: text.slice(c.start, c.end),
+        label: c.label,
+        start: c.start,
+        end: c.end,
+        score: avgScore
+      };
+    }
+    isLoaded() {
+      return this.pipeline !== null;
+    }
+  };
+
+  // ============================================================
+  // INLINED: index.js (Analyzer Engine + All Recognizers)
+  // ============================================================
+
+  // src/analyzer/entity-recognizer.ts
+  var EntityRecognizer = class {
+    name;
+    supportedEntities;
+    supportedLanguage;
+    context;
+    constructor(opts) {
+      this.name = opts.name;
+      this.supportedEntities = opts.supportedEntities;
+      this.supportedLanguage = opts.supportedLanguage ?? "any";
+      this.context = opts.context ?? [];
+    }
+    getSuportedEntities() {
+      return this.supportedEntities;
+    }
+  };
+
+  // src/analyzer/recognizer-result.ts
+  function createResult(entityType, start, end, score, recognizerName, analysisExplanation) {
+    return { entityType, start, end, score, recognizerName, analysisExplanation };
+  }
+
+  // src/analyzer/pattern-recognizer.ts
+  var PatternRecognizer = class extends EntityRecognizer {
+    patterns;
+    denyList;
+    denyListScore;
+    constructor(opts) {
+      super(opts);
+      this.patterns = opts.patterns ?? [];
+      this.denyList = opts.denyList ?? [];
+      this.denyListScore = opts.denyListScore ?? 1;
+    }
+    analyze(text, entities, _nlpArtifacts) {
+      const results = [];
+      for (const pattern of this.patterns) {
+        const regex = new RegExp(pattern.regex, "gi");
+        let match;
+        while ((match = regex.exec(text)) !== null) {
+          const start = match.index;
+          const end = start + match[0].length;
+          let score = pattern.score;
+          const validated = this.validateResult(match[0], start, end, text);
+          if (validated === false) continue;
+          if (validated === true) score = Math.max(score, 0.85);
+          results.push(
+            createResult(
+              this.supportedEntities[0],
+              start,
+              end,
+              score,
+              this.name,
+              {
+                recognizer: this.name,
+                patternName: pattern.name,
+                patternLength: pattern.regex.length,
+                originalScore: pattern.score,
+                score,
+                scoreContextImprovement: 0,
+                validationResult: validated ?? void 0
+              }
+            )
+          );
+        }
+      }
+      if (this.denyList.length > 0) {
+        const denyPattern = this.denyList.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+        const regex = new RegExp(`\\b(?:${denyPattern})\\b`, "gi");
+        let match;
+        while ((match = regex.exec(text)) !== null) {
+          results.push(
+            createResult(
+              this.supportedEntities[0],
+              match.index,
+              match.index + match[0].length,
+              this.denyListScore,
+              this.name
+            )
+          );
+        }
+      }
+      return results;
+    }
+    validateResult(_matchText, _start, _end, _fullText) {
+      return null;
+    }
+  };
+
+  // src/utils/luhn.ts
+  function luhnCheck(num) {
+    const digits = num.replace(/\D/g, "");
+    if (digits.length === 0) return false;
+    let sum = 0;
+    let alternate = false;
+    for (let i = digits.length - 1; i >= 0; i--) {
+      let n = parseInt(digits[i], 10);
+      if (alternate) {
+        n *= 2;
+        if (n > 9) n -= 9;
+      }
+      sum += n;
+      alternate = !alternate;
+    }
+    return sum % 10 === 0;
+  }
+
+  // src/recognizers/credit-card-recognizer.ts
+  var CreditCardRecognizer = class extends PatternRecognizer {
+    constructor() {
+      super({
+        name: "CreditCardRecognizer",
+        supportedEntities: ["CREDIT_CARD"],
+        patterns: [
+          { name: "credit_card", regex: "\\b(?:\\d[ -]*?){13,19}\\b", score: 0.5 }
+        ],
+        context: ["credit","card","visa","mastercard","amex","american express","discover","diners","jcb","cc","debit","payment"]
+      });
+    }
+    validateResult(matchText) {
+      const digits = matchText.replace(/\D/g, "");
+      if (digits.length < 12 || digits.length > 19) return false;
+      return luhnCheck(digits) ? true : false;
+    }
+  };
+
+  // src/recognizers/email-recognizer.ts
+  var EmailRecognizer = class extends PatternRecognizer {
+    constructor() {
+      super({
+        name: "EmailRecognizer",
+        supportedEntities: ["EMAIL_ADDRESS"],
+        patterns: [
+          { name: "email", regex: "\\b[A-Za-z0-9._%+\\-]+@[A-Za-z0-9.\\-]+\\.[A-Za-z]{2,}\\b", score: 1 }
+        ],
+        context: ["email", "e-mail", "mail", "address"]
+      });
+    }
+  };
+
+  // src/recognizers/phone-recognizer.ts
+  var PhoneRecognizer = class extends PatternRecognizer {
+    constructor() {
+      super({
+        name: "PhoneRecognizer",
+        supportedEntities: ["PHONE_NUMBER"],
+        patterns: [
+          { name: "phone_us", regex: "(?:\\+?1[\\s.-]?)?\\(?\\d{3}\\)?[\\s.-]?\\d{3}[\\s.-]?\\d{4}", score: 0.5 },
+          { name: "phone_intl", regex: "\\+\\d{1,3}[\\s.-]?\\d{1,4}[\\s.-]?\\d{1,4}[\\s.-]?\\d{1,9}", score: 0.5 }
+        ],
+        context: ["phone","telephone","tel","call","mobile","cell","fax","contact","number"]
+      });
+    }
+    validateResult(matchText) {
+      const digits = matchText.replace(/\D/g, "");
+      if (digits.length < 7 || digits.length > 16) return false;
+      if (/^0{7,}$/.test(digits)) return false;
+      return null;
+    }
+  };
+
+  // src/recognizers/ssn-recognizer.ts
+  var SsnRecognizer = class extends PatternRecognizer {
+    constructor() {
+      super({
+        name: "UsSsnRecognizer",
+        supportedEntities: ["US_SSN"],
+        patterns: [
+          { name: "ssn_with_dashes", regex: "\\b\\d{3}-\\d{2}-\\d{4}\\b", score: 0.85 },
+          { name: "ssn_no_dashes", regex: "\\b\\d{9}\\b", score: 0.3 }
+        ],
+        context: ["social","security","ssn","social security number","taxpayer","tax","tin"]
+      });
+    }
+    validateResult(matchText) {
+      const digits = matchText.replace(/\D/g, "");
+      if (digits.length !== 9) return false;
+      const area = parseInt(digits.slice(0, 3), 10);
+      const group = parseInt(digits.slice(3, 5), 10);
+      const serial = parseInt(digits.slice(5, 9), 10);
+      if (area === 0 || area === 666 || area >= 900) return false;
+      if (group === 0) return false;
+      if (serial === 0) return false;
+      return null;
+    }
+  };
+
+  // src/recognizers/url-recognizer.ts
+  var UrlRecognizer = class extends PatternRecognizer {
+    constructor() {
+      super({
+        name: "UrlRecognizer",
+        supportedEntities: ["URL"],
+        patterns: [
+          { name: "url", regex: "(?:https?://|www\\.)[\\w\\-]+(?:\\.[\\w\\-]+)+(?:/[\\w\\-.~:/?#\\[\\]@!$&'()*+,;=%]*)?", score: 0.5 }
+        ],
+        context: ["url", "website", "link", "site", "href", "http"]
+      });
+    }
+    validateResult(matchText) {
+      if (matchText.startsWith("http://") || matchText.startsWith("https://")) return true;
+      return null;
+    }
+  };
+
+  // src/recognizers/ip-recognizer.ts
+  var IpRecognizer = class extends PatternRecognizer {
+    constructor() {
+      super({
+        name: "IpRecognizer",
+        supportedEntities: ["IP_ADDRESS"],
+        patterns: [
+          { name: "ipv4", regex: "\\b(?:25[0-5]|2[0-4]\\d|[01]?\\d\\d?)\\.(?:25[0-5]|2[0-4]\\d|[01]?\\d\\d?)\\.(?:25[0-5]|2[0-4]\\d|[01]?\\d\\d?)\\.(?:25[0-5]|2[0-4]\\d|[01]?\\d\\d?)\\b", score: 0.6 },
+          { name: "ipv6", regex: "\\b(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}\\b", score: 0.6 }
+        ],
+        context: ["ip", "address", "ipv4", "ipv6", "network", "host"]
+      });
+    }
+  };
+
+  // src/recognizers/iban-recognizer.ts
+  var IBAN_LENGTHS = {AL:28,AD:24,AT:20,AZ:28,BH:22,BY:28,BE:16,BA:20,BR:29,BG:22,CR:22,HR:21,CY:28,CZ:24,DK:18,DO:28,EG:29,SV:28,EE:20,FO:18,FI:18,FR:27,GE:22,DE:22,GI:23,GR:27,GL:18,GT:28,HU:28,IS:26,IQ:23,IE:22,IL:23,IT:27,JO:30,KZ:20,XK:20,KW:30,LV:21,LB:28,LI:21,LT:20,LU:20,MT:31,MR:27,MU:30,MC:27,MD:24,ME:22,NL:18,MK:19,NO:15,PK:24,PS:29,PL:28,PT:25,QA:29,RO:24,LC:32,SM:27,SA:24,RS:22,SC:31,SK:24,SI:19,ES:24,SE:24,CH:21,TL:23,TN:24,TR:26,UA:29,AE:23,GB:22,VA:22,VG:24};
+  function validateIban(iban) {
+    const cleaned = iban.replace(/\s/g, "").toUpperCase();
+    const country = cleaned.slice(0, 2);
+    if (IBAN_LENGTHS[country] && cleaned.length !== IBAN_LENGTHS[country]) return false;
+    const rearranged = cleaned.slice(4) + cleaned.slice(0, 4);
+    let numStr = "";
+    for (const ch of rearranged) {
+      const code = ch.charCodeAt(0);
+      if (code >= 65 && code <= 90) { numStr += (code - 55).toString(); } else { numStr += ch; }
+    }
+    let remainder = 0;
+    for (let i = 0; i < numStr.length; i++) {
+      remainder = (remainder * 10 + parseInt(numStr[i], 10)) % 97;
+    }
+    return remainder === 1;
+  }
+  var IbanRecognizer = class extends PatternRecognizer {
+    constructor() {
+      super({
+        name: "IbanRecognizer",
+        supportedEntities: ["IBAN_CODE"],
+        patterns: [
+          { name: "iban", regex: "\\b[A-Z]{2}\\d{2}[\\s]?[A-Za-z0-9]{4}(?:[\\s]?[A-Za-z0-9]{4}){2,7}(?:[\\s]?[A-Za-z0-9]{1,4})?\\b", score: 0.5 }
+        ],
+        context: ["iban", "bank", "account", "swift", "bic", "international"]
+      });
+    }
+    validateResult(matchText) {
+      return validateIban(matchText) ? true : false;
+    }
+  };
+
+  // src/recognizers/crypto-recognizer.ts
+  var CryptoRecognizer = class extends PatternRecognizer {
+    constructor() {
+      super({
+        name: "CryptoRecognizer",
+        supportedEntities: ["CRYPTO"],
+        patterns: [
+          { name: "bitcoin", regex: "\\b[13][a-km-zA-HJ-NP-Z1-9]{25,34}\\b", score: 0.5 },
+          { name: "bitcoin_bech32", regex: "\\bbc1[ac-hj-np-zAC-HJ-NP-Z02-9]{11,71}\\b", score: 0.5 },
+          { name: "ethereum", regex: "\\b0x[0-9a-fA-F]{40}\\b", score: 0.5 }
+        ],
+        context: ["bitcoin", "btc", "ethereum", "eth", "crypto", "wallet", "address"]
+      });
+    }
+  };
+
+  // src/recognizers/date-recognizer.ts
+  var DateRecognizer = class extends PatternRecognizer {
+    constructor() {
+      super({
+        name: "DateRecognizer",
+        supportedEntities: ["DATE_TIME"],
+        patterns: [
+          { name: "date_iso", regex: "\\b\\d{4}-\\d{2}-\\d{2}\\b", score: 0.6 },
+          { name: "date_us", regex: "\\b(?:0?[1-9]|1[0-2])/(?:0?[1-9]|[12]\\d|3[01])/(?:\\d{2}|\\d{4})\\b", score: 0.5 },
+          { name: "date_eu", regex: "\\b(?:0?[1-9]|[12]\\d|3[01])\\.(?:0?[1-9]|1[0-2])\\.(?:\\d{2}|\\d{4})\\b", score: 0.5 },
+          { name: "date_text", regex: "\\b(?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\\.?\\s+\\d{1,2}(?:st|nd|rd|th)?,?\\s*\\d{2,4}\\b", score: 0.6 }
+        ],
+        context: ["date", "born", "birthday", "dob", "birth"]
+      });
+    }
+  };
+
+  // src/recognizers/us-bank-recognizer.ts
+  var UsBankRecognizer = class extends PatternRecognizer {
+    constructor() {
+      super({
+        name: "UsBankRecognizer",
+        supportedEntities: ["US_BANK_NUMBER"],
+        patterns: [
+          { name: "us_bank_number", regex: "\\b\\d{8,17}\\b", score: 0.05 }
+        ],
+        context: ["bank","account","routing","checking","savings","account number","acct"]
+      });
+    }
+  };
+
+  // src/recognizers/us-itin-recognizer.ts
+  var UsItinRecognizer = class extends PatternRecognizer {
+    constructor() {
+      super({
+        name: "UsItinRecognizer",
+        supportedEntities: ["US_ITIN"],
+        patterns: [
+          { name: "itin_dashes", regex: "\\b9\\d{2}-[7-9]\\d-\\d{4}\\b", score: 0.85 },
+          { name: "itin_no_dashes", regex: "\\b9\\d{2}[7-9]\\d{5}\\b", score: 0.3 }
+        ],
+        context: ["itin", "tax", "taxpayer", "individual", "identification"]
+      });
+    }
+  };
+
+  // src/recognizers/us-passport-recognizer.ts
+  var UsPassportRecognizer = class extends PatternRecognizer {
+    constructor() {
+      super({
+        name: "UsPassportRecognizer",
+        supportedEntities: ["US_PASSPORT"],
+        patterns: [
+          { name: "us_passport", regex: "\\b[A-Z]?\\d{8,9}\\b", score: 0.1 }
+        ],
+        context: ["passport", "travel", "document", "us passport"]
+      });
+    }
+  };
+
+  // src/recognizers/transformers-ner-recognizer.ts
+  var LABEL_MAP = { PER: "PERSON", LOC: "LOCATION", ORG: "ORGANIZATION", MISC: "NRP" };
+  var TransformersNerRecognizer = class extends EntityRecognizer {
+    constructor() {
+      super({
+        name: "TransformersNerRecognizer",
+        supportedEntities: ["PERSON","LOCATION","ORGANIZATION","NRP","DATE_TIME","PHONE_NUMBER","EMAIL_ADDRESS","CREDIT_CARD","US_SSN","IBAN_CODE","IP_ADDRESS","URL","CRYPTO","US_PASSPORT","US_ITIN","US_BANK_NUMBER"]
+      });
+    }
+    analyze(_text, entities, nlpArtifacts) {
+      const results = [];
+      for (const entity of nlpArtifacts.entities) {
+        const mapped = LABEL_MAP[entity.label] ?? entity.label;
+        if (entities.length > 0 && !entities.includes(mapped)) continue;
+        results.push(createResult(mapped, entity.start, entity.end, entity.score, this.name));
+      }
+      return results;
+    }
+  };
+
+  // src/recognizers/ahv-recognizer.ts
+  var AhvRecognizer = class extends PatternRecognizer {
+    constructor() {
+      super({
+        name: "AhvRecognizer",
+        supportedEntities: ["CH_AHV"],
+        patterns: [
+          { name: "ahv_dotted", regex: "\\b756\\.\\d{4}\\.\\d{4}\\.\\d{2}\\b", score: 0.9 },
+          { name: "ahv_no_dots", regex: "\\b756\\d{10}\\b", score: 0.4 }
+        ],
+        context: ["ahv","avs","sozialversicherung","assurance","sociale","versichertennummer","num\xE9ro","assur\xE9"]
+      });
+    }
+    validateResult(matchText) {
+      const digits = matchText.replace(/\D/g, "");
+      if (digits.length !== 13) return false;
+      let sum = 0;
+      for (let i = 0; i < 12; i++) {
+        sum += parseInt(digits[i], 10) * (i % 2 === 0 ? 1 : 3);
+      }
+      const check = (10 - sum % 10) % 10;
+      return check === parseInt(digits[12], 10) ? null : false;
+    }
+  };
+
+  // src/recognizers/swiss-uid-recognizer.ts
+  var SwissUidRecognizer = class extends PatternRecognizer {
+    constructor() {
+      super({
+        name: "SwissUidRecognizer",
+        supportedEntities: ["CH_UID"],
+        patterns: [
+          { name: "uid_dotted", regex: "\\bCHE-?\\d{3}\\.\\d{3}\\.\\d{3}\\b", score: 0.95 },
+          { name: "uid_no_dots", regex: "\\bCHE-?\\d{9}\\b", score: 0.7 }
+        ],
+        context: ["uid","handelsregister","registre","commerce","unternehmens","identifikationsnummer","firma","soci\xE9t\xE9","company"]
+      });
+    }
+  };
+
+  // src/recognizers/eu-date-recognizer.ts
+  var EuDateRecognizer = class extends PatternRecognizer {
+    constructor() {
+      super({
+        name: "EuDateRecognizer",
+        supportedEntities: ["DATE_TIME"],
+        patterns: [
+          { name: "eu_date_full", regex: "\\b(?:0?[1-9]|[12]\\d|3[01])[\\./\\-](?:0?[1-9]|1[0-2])[\\./\\-](?:19|20)\\d{2}\\b", score: 0.8 },
+          { name: "german_date_written", regex: "\\b(?:0?[1-9]|[12]\\d|3[01])\\.\\s*(?:Januar|Februar|M\xE4rz|April|Mai|Juni|Juli|August|September|Oktober|November|Dezember)\\s+(?:19|20)\\d{2}\\b", score: 0.9 },
+          { name: "french_date_written", regex: "\\b(?:0?[1-9]|[12]\\d|3[01])\\s+(?:janvier|f\xE9vrier|mars|avril|mai|juin|juillet|ao\xFBt|septembre|octobre|novembre|d\xE9cembre)\\s+(?:19|20)\\d{2}\\b", score: 0.9 }
+        ],
+        context: ["geboren","geburtsdatum","datum","date","n\xE9","n\xE9e","naissance","gelistet","verf\xFCgung","d\xE9cision"]
+      });
+    }
+  };
+
+  // src/recognizers/swiss-phone-recognizer.ts
+  var SwissPhoneRecognizer = class extends PatternRecognizer {
+    constructor() {
+      super({
+        name: "SwissPhoneRecognizer",
+        supportedEntities: ["PHONE_NUMBER"],
+        patterns: [
+          { name: "swiss_intl", regex: "\\+41\\s?\\d{2}\\s?\\d{3}\\s?\\d{2}\\s?\\d{2}\\b", score: 0.9 },
+          { name: "swiss_local", regex: "\\b0\\d{2}\\s?\\d{3}\\s?\\d{2}\\s?\\d{2}\\b", score: 0.6 },
+          { name: "german_intl", regex: "\\+49\\s?\\d{2,5}[\\s/]\\d{3,8}(?:[\\s-]\\d{1,5})?\\b", score: 0.85 },
+          { name: "french_intl", regex: "\\+33\\s?\\d\\s?\\d{2}\\s?\\d{2}\\s?\\d{2}\\s?\\d{2}\\b", score: 0.85 },
+          { name: "french_local", regex: "\\b0[1-9]\\s?\\d{2}\\s?\\d{2}\\s?\\d{2}\\s?\\d{2}\\b", score: 0.5 }
+        ],
+        context: ["tel","telefon","phone","t\xE9l\xE9phone","anruf","appel","erreichbar","kontakt","contact","fax","mobil","mobile"]
+      });
+    }
+  };
+
+  // src/analyzer/recognizer-registry.ts
+  var RecognizerRegistry = class _RecognizerRegistry {
+    recognizers = [];
+    addRecognizer(recognizer) {
+      this.recognizers.push(recognizer);
+    }
+    removeRecognizer(name) {
+      this.recognizers = this.recognizers.filter((r) => r.name !== name);
+    }
+    getRecognizers(language, entities) {
+      return this.recognizers.filter((r) => {
+        if (r.supportedLanguage !== language && r.supportedLanguage !== "any") return false;
+        if (entities && entities.length > 0) {
+          return r.supportedEntities.some((e) => entities.includes(e));
+        }
+        return true;
+      });
+    }
+    getSupportedEntities(language) {
+      const entities = new Set();
+      for (const r of this.getRecognizers(language)) {
+        for (const e of r.supportedEntities) entities.add(e);
+      }
+      return [...entities];
+    }
+    loadPredefinedRecognizers(nlpEngine) {
+      this.recognizers.push(
+        new CreditCardRecognizer(),
+        new EmailRecognizer(),
+        new PhoneRecognizer(),
+        new SsnRecognizer(),
+        new UrlRecognizer(),
+        new IpRecognizer(),
+        new IbanRecognizer(),
+        new CryptoRecognizer(),
+        new DateRecognizer(),
+        new UsBankRecognizer(),
+        new UsItinRecognizer(),
+        new UsPassportRecognizer(),
+        new AhvRecognizer(),
+        new SwissUidRecognizer(),
+        new EuDateRecognizer(),
+        new SwissPhoneRecognizer()
+      );
+      if (nlpEngine && nlpEngine.constructor.name !== "NullNlpEngine") {
+        this.recognizers.push(new TransformersNerRecognizer());
+      }
+    }
+    static withAllRecognizers(nlpEngine) {
+      const registry = new _RecognizerRegistry();
+      registry.loadPredefinedRecognizers(nlpEngine);
+      return registry;
+    }
+    static withPatternRecognizers() {
+      const registry = new _RecognizerRegistry();
+      registry.loadPredefinedRecognizers();
+      return registry;
+    }
+  };
+
+  // src/analyzer/context-aware-enhancer.ts
+  var SUFFIXES = ["ing", "ed", "ly", "er", "est", "tion", "sion", "ment", "ness", "s"];
+  function simpleStem(word) {
+    const lower = word.toLowerCase();
+    for (const suffix of SUFFIXES) {
+      if (lower.endsWith(suffix) && lower.length > suffix.length + 2) {
+        return lower.slice(0, -suffix.length);
+      }
+    }
+    return lower;
+  }
+  var ContextAwareEnhancer = class {
+    contextWindowSize;
+    contextBoost;
+    constructor(opts) {
+      this.contextWindowSize = opts?.contextWindowSize ?? 5;
+      this.contextBoost = opts?.contextBoost ?? 0.35;
+    }
+    enhance(results, recognizers, nlpArtifacts, text) {
+      const recognizerMap = new Map();
+      for (const r of recognizers) {
+        recognizerMap.set(r.name, r);
+      }
+      return results.map((result) => {
+        const recognizer = recognizerMap.get(result.recognizerName);
+        if (!recognizer || recognizer.context.length === 0) return result;
+        const contextWords = recognizer.context.map(simpleStem);
+        const surroundingTokens = this.getSurroundingTokens(result, nlpArtifacts);
+        for (const token of surroundingTokens) {
+          const stemmed = simpleStem(token);
+          if (contextWords.some((cw) => stemmed.includes(cw) || cw.includes(stemmed))) {
+            const boosted = Math.min(result.score + this.contextBoost, 1);
+            return {
+              ...result,
+              score: boosted,
+              analysisExplanation: result.analysisExplanation ? {
+                ...result.analysisExplanation,
+                score: boosted,
+                scoreContextImprovement: boosted - result.score,
+                supportiveContextWord: token
+              } : void 0
+            };
+          }
+        }
+        return result;
+      });
+    }
+    getSurroundingTokens(result, artifacts) {
+      const tokens = [];
+      for (let i = 0; i < artifacts.tokens.length; i++) {
+        const span = artifacts.tokenSpans[i];
+        if (!span) continue;
+        const distance = Math.min(
+          Math.abs(span.start - result.end),
+          Math.abs(span.end - result.start)
+        );
+        if (span.end <= result.start || span.start >= result.end) {
+          if (distance <= 50) {
+            tokens.push(artifacts.tokens[i]);
+          }
+        }
+      }
+      return tokens;
+    }
+  };
+
+  // src/utils/conflict-resolution.ts
+  function resolveConflicts(results) {
+    if (results.length <= 1) return results;
+    const sorted = [...results].sort((a, b) => a.start - b.start || b.end - a.end);
+    const resolved = [];
+    for (const current of sorted) {
+      const last = resolved[resolved.length - 1];
+      if (!last || current.start >= last.end) {
+        resolved.push(current);
+      } else {
+        if (current.score > last.score) {
+          resolved[resolved.length - 1] = current;
+        } else if (current.score === last.score && current.entityType === last.entityType) {
+          resolved[resolved.length - 1] = {
+            ...last,
+            end: Math.max(last.end, current.end)
+          };
+        }
+      }
+    }
+    return resolved;
+  }
+  function filterByThreshold(results, threshold) {
+    return results.filter((r) => r.score >= threshold);
+  }
+  function filterByAllowList(results, text, allowList) {
+    if (allowList.length === 0) return results;
+    const allowSet = new Set(allowList.map((s) => s.toLowerCase()));
+    return results.filter((r) => {
+      const matched = text.slice(r.start, r.end).toLowerCase();
+      return !allowSet.has(matched);
+    });
+  }
+
+  // src/analyzer/analyzer-engine.ts
+  var AnalyzerEngine = class {
+    registry;
+    nlpEngine;
+    enhancer;
+    defaultScoreThreshold;
+    constructor(opts = {}) {
+      this.nlpEngine = opts.nlpEngine ?? new NullNlpEngine();
+      this.registry = opts.registry ?? RecognizerRegistry.withAllRecognizers(this.nlpEngine);
+      this.enhancer = new ContextAwareEnhancer();
+      this.defaultScoreThreshold = opts.defaultScoreThreshold ?? 0;
+    }
+    async analyze(text, opts = {}) {
+      const language = opts.language ?? "en";
+      const threshold = opts.scoreThreshold ?? this.defaultScoreThreshold;
+      if (opts.adHocRecognizers) {
+        for (const config of opts.adHocRecognizers) {
+          this.registry.addRecognizer(
+            new PatternRecognizer({
+              name: config.name,
+              supportedEntities: config.supportedEntities,
+              patterns: config.patterns,
+              denyList: config.denyList,
+              supportedLanguage: config.supportedLanguage,
+              context: config.context
+            })
+          );
+        }
+      }
+      const recognizers = this.registry.getRecognizers(language, opts.entities);
+      if (recognizers.length === 0) return [];
+      const nlpArtifacts = await this.nlpEngine.process(text, language);
+      let results = [];
+      for (const recognizer of recognizers) {
+        const recognized = recognizer.analyze(text, opts.entities ?? [], nlpArtifacts);
+        results.push(...recognized);
+      }
+      results = this.enhancer.enhance(results, recognizers, nlpArtifacts, text);
+      results = filterByThreshold(results, threshold);
+      if (opts.allowList) {
+        results = filterByAllowList(results, text, opts.allowList);
+      }
+      results = resolveConflicts(results);
+      return results;
+    }
+    getSupportedEntities(language) {
+      return this.registry.getSupportedEntities(language ?? "en");
+    }
+  };
+
+  // ============================================================
+  // APP CODE (from browser-demo.html)
+  // ============================================================
+
+  const regexAnalyzer = new AnalyzerEngine();
+  let nerAnalyzer = null;
+  const anonymizer = new AnonymizerEngine();
+
+  let lastText = '';
+  let lastResults = [];
+  let lastAnon = null;
+  let lastElapsed = 0;
+  const excludedSet = new Set();
+  const scanBtn = document.getElementById('scanBtn');
+  const confidenceSlider = document.getElementById('confidenceSlider');
+  const confidenceValue = document.getElementById('confidenceValue');
+
+  const ENTITY_GROUPS = {
+    'People & Organizations': [
+      { type: 'PERSON', desc: 'Full names, aliases' },
+      { type: 'ORGANIZATION', desc: 'Companies, gov bodies' },
+      { type: 'LOCATION', desc: 'Cities, countries, addresses' },
+      { type: 'NATIONALITY', desc: 'Nationality references' },
+      { type: 'NRP', desc: 'Nationalities, religions, political groups' },
+    ],
+    'Dates & Contact': [
+      { type: 'DATE_TIME', desc: 'Dates in any format' },
+      { type: 'PHONE_NUMBER', desc: 'Phone numbers' },
+      { type: 'EMAIL_ADDRESS', desc: 'Email addresses' },
+      { type: 'URL', desc: 'Web URLs' },
+      { type: 'IP_ADDRESS', desc: 'IP addresses' },
+    ],
+    'Financial': [
+      { type: 'CREDIT_CARD', desc: 'Credit card numbers (Luhn)' },
+      { type: 'IBAN_CODE', desc: 'IBAN numbers' },
+      { type: 'CRYPTO', desc: 'Crypto wallet addresses' },
+      { type: 'US_BANK_NUMBER', desc: 'US bank account numbers' },
+    ],
+    'Swiss / European': [
+      { type: 'CH_AHV', desc: 'Swiss AHV/AVS social security' },
+      { type: 'CH_UID', desc: 'Swiss company UID (CHE-xxx.xxx.xxx)' },
+    ],
+    'Identity Documents': [
+      { type: 'PASSPORT', desc: 'Passport numbers' },
+      { type: 'NATIONAL_ID', desc: 'National IDs' },
+      { type: 'US_SSN', desc: 'US Social Security Numbers' },
+      { type: 'US_ITIN', desc: 'US Individual Tax ID' },
+      { type: 'US_PASSPORT', desc: 'US passport numbers' },
+    ],
+    'Other': [
+      { type: 'OTHER', desc: 'Manually tagged entities' },
+    ],
+  };
+
+  const enabledEntities = new Set();
+  for (const group of Object.values(ENTITY_GROUPS)) {
+    for (const item of group) enabledEntities.add(item.type);
+  }
+
+  const settingsModal = document.getElementById('settingsModal');
+  const modalBody = document.getElementById('modalBody');
+
+  function buildModalBody() {
+    modalBody.replaceChildren();
+    for (const [groupName, items] of Object.entries(ENTITY_GROUPS)) {
+      const title = document.createElement('div');
+      title.className = 'entity-group-title';
+      title.textContent = groupName;
+      modalBody.appendChild(title);
+
+      for (const item of items) {
+        const row = document.createElement('label');
+        row.className = 'entity-toggle';
+
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = enabledEntities.has(item.type);
+        cb.addEventListener('change', () => {
+          if (cb.checked) enabledEntities.add(item.type);
+          else enabledEntities.delete(item.type);
+        });
+
+        const lbl = document.createElement('span');
+        lbl.className = 'entity-toggle-label';
+        lbl.textContent = item.type;
+
+        const desc = document.createElement('span');
+        desc.className = 'entity-toggle-desc';
+        desc.textContent = item.desc;
+
+        row.append(cb, lbl, desc);
+        modalBody.appendChild(row);
+      }
+    }
+  }
+
+  document.getElementById('settingsBtn').addEventListener('click', () => {
+    buildModalBody();
+    settingsModal.classList.add('open');
+  });
+
+  function closeModal() {
+    settingsModal.classList.remove('open');
+    rerender();
+  }
+
+  document.getElementById('modalClose').addEventListener('click', closeModal);
+  document.getElementById('modalDone').addEventListener('click', closeModal);
+  settingsModal.addEventListener('click', (e) => {
+    if (e.target === settingsModal) closeModal();
+  });
+
+  document.getElementById('selectAll').addEventListener('click', () => {
+    for (const group of Object.values(ENTITY_GROUPS)) {
+      for (const item of group) enabledEntities.add(item.type);
+    }
+    buildModalBody();
+  });
+
+  document.getElementById('selectNone').addEventListener('click', () => {
+    enabledEntities.clear();
+    buildModalBody();
+  });
+
+
+  function scoreColor(score) {
+    if (score >= 0.8) return 'var(--green)';
+    if (score >= 0.5) return 'var(--amber)';
+    return 'var(--red)';
+  }
+
+  function rerender() {
+    if (lastResults.length > 0) {
+      renderResults(lastText, lastResults, lastAnon, lastElapsed, confidenceSlider.value / 100);
+    }
+  }
+
+  function groupKey(r) {
+    return r.entityType + '|' + r.start + '→' + r.end;
+  }
+  function displayKey(r, text) {
+    return r.entityType + '|' + text.slice(r.start, r.end);
+  }
+
+  function renderResults(text, results, anon, elapsed, minConfidence) {
+    const threshold = minConfidence ?? 0;
+    const aboveThreshold = results.filter(r => r.score >= threshold);
+
+    document.getElementById('resultsWrapper').classList.add('visible');
+
+    const groups = [];
+    const seen = new Map();
+    for (const r of aboveThreshold) {
+      const dk = displayKey(r, text);
+      if (seen.has(dk)) {
+        seen.get(dk).items.push(r);
+        const g = seen.get(dk);
+        if (r.score > g.bestScore) g.bestScore = r.score;
+      } else {
+        const g = { dk, items: [r], bestScore: r.score };
+        seen.set(dk, g);
+        groups.push(g);
+      }
+    }
+
+    const list = document.getElementById('entityList');
+    list.replaceChildren();
+    if (groups.length === 0) {
+      const li = document.createElement('li');
+      li.className = 'empty-state';
+      li.textContent = threshold > 0 ? 'No entities above ' + (threshold * 100).toFixed(0) + '% confidence' : 'No PII detected';
+      list.appendChild(li);
+    } else {
+      groups.forEach((g, i) => {
+        const rep = g.items[0];
+        const checked = !excludedSet.has(g.dk);
+
+        const li = document.createElement('li');
+        li.className = 'entity-item' + (checked ? '' : ' excluded');
+        li.style.animationDelay = i * 40 + 'ms';
+        li.dataset.dk = g.dk;
+        li.addEventListener('mouseenter', () => {
+          document.querySelectorAll('.pii-hl[data-dk="' + CSS.escape(g.dk) + '"]')
+            .forEach(el => el.classList.add('hover'));
+        });
+        li.addEventListener('mouseleave', () => {
+          document.querySelectorAll('.pii-hl.hover').forEach(el => el.classList.remove('hover'));
+        });
+
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.className = 'entity-check';
+        cb.checked = checked;
+        cb.title = checked ? 'Uncheck to keep this value visible in output' : 'Check to anonymize this value';
+        cb.addEventListener('change', () => {
+          if (cb.checked) {
+            excludedSet.delete(g.dk);
+          } else {
+            excludedSet.add(g.dk);
+          }
+          rerender();
+        });
+
+        const tag = document.createElement('span');
+        tag.className = 'entity-tag';
+        tag.dataset.type = rep.entityType;
+        tag.textContent = rep.entityType;
+
+        const txt = document.createElement('span');
+        txt.className = 'entity-text';
+        txt.textContent = text.slice(rep.start, rep.end);
+
+        const scoreWrap = document.createElement('span');
+        scoreWrap.className = 'entity-score-wrap';
+
+        if (g.items.length > 1) {
+          const countBadge = document.createElement('span');
+          countBadge.className = 'entity-count';
+          countBadge.textContent = String(g.items.length);
+          countBadge.title = g.items.length + ' occurrences';
+          scoreWrap.appendChild(countBadge);
+        }
+
+        const bar = document.createElement('span');
+        bar.className = 'entity-score-bar';
+        const fill = document.createElement('span');
+        fill.className = 'entity-score-fill';
+        fill.style.width = (g.bestScore * 100).toFixed(0) + '%';
+        fill.style.background = scoreColor(g.bestScore);
+        bar.appendChild(fill);
+
+        const scoreLbl = document.createElement('span');
+        scoreLbl.className = 'entity-score';
+        scoreLbl.textContent = (g.bestScore * 100).toFixed(0) + '%';
+
+        scoreWrap.append(bar, scoreLbl);
+        li.append(cb, tag, txt, scoreWrap);
+        list.appendChild(li);
+      });
+    }
+
+    const active = aboveThreshold.filter(r => !excludedSet.has(displayKey(r, text)));
+    document.getElementById('entityCount').textContent = String(active.length);
+
+    showHighlightedView(text, active);
+
+    const anonEl = document.getElementById('anonOutput');
+    anonEl.replaceChildren();
+
+    const idCounters = {};
+    const textToId = {};
+    const idMapping = {};
+    const ascending = [...active].sort((a, b) => a.start - b.start);
+    for (const r of ascending) {
+      const key = r.entityType + '::' + text.slice(r.start, r.end);
+      if (!textToId[key]) {
+        const n = (idCounters[r.entityType] = (idCounters[r.entityType] || 0) + 1);
+        const tag = r.entityType + '_' + n;
+        textToId[key] = tag;
+        idMapping[tag] = text.slice(r.start, r.end);
+      }
+      r._anonTag = textToId[key];
+    }
+
+    window.__piiMapping = idMapping;
+
+    let anonText = text;
+    const descending = [...active].sort((a, b) => b.start - a.start);
+    for (const r of descending) {
+      anonText = anonText.slice(0, r.start) + '<' + r._anonTag + '>' + anonText.slice(r.end);
+    }
+
+    const tagToDk = {};
+    for (const r of active) {
+      tagToDk[r._anonTag] = displayKey(r, text);
+    }
+
+    const tagPattern = /<(\w+_\d+)>/g;
+    let anonCursor = 0;
+    let m;
+    while ((m = tagPattern.exec(anonText)) !== null) {
+      if (m.index > anonCursor) anonEl.appendChild(document.createTextNode(anonText.slice(anonCursor, m.index)));
+      const badge = document.createElement('span');
+      badge.className = 'redacted';
+      badge.textContent = m[0];
+      const dk = tagToDk[m[1]];
+      if (dk) {
+        badge.dataset.dk = dk;
+        badge.addEventListener('mouseenter', () => {
+          document.querySelectorAll('.entity-item[data-dk="' + CSS.escape(dk) + '"]')
+            .forEach(el => el.classList.add('hover'));
+          document.querySelectorAll('.pii-hl[data-dk="' + CSS.escape(dk) + '"]')
+            .forEach(el => el.classList.add('hover'));
+        });
+        badge.addEventListener('mouseleave', () => {
+          document.querySelectorAll('.entity-item.hover').forEach(el => el.classList.remove('hover'));
+          document.querySelectorAll('.pii-hl.hover').forEach(el => el.classList.remove('hover'));
+        });
+      }
+      anonEl.appendChild(badge);
+      anonCursor = m.index + m[0].length;
+    }
+    if (anonCursor < anonText.length) anonEl.appendChild(document.createTextNode(anonText.slice(anonCursor)));
+
+
+    document.getElementById('statEntities').textContent = String(active.length);
+    document.getElementById('statTypes').textContent = String(new Set(active.map(r => r.entityType)).size);
+    document.getElementById('statTime').textContent = String(elapsed);
+  }
+
+  document.getElementById('copyAnon').addEventListener('click', () => {
+    const anonEl = document.getElementById('anonOutput');
+    const text = anonEl.textContent || '';
+    navigator.clipboard.writeText(text).then(() => {
+      const btn = document.getElementById('copyAnon');
+      const orig = btn.textContent;
+      btn.textContent = '✓ Copied';
+      setTimeout(() => btn.textContent = orig, 1500);
+    });
+  });
+
+  scanBtn.addEventListener('click', async () => {
+    const text = document.getElementById('inputText').value;
+    if (!text.trim()) return;
+
+    scanBtn.disabled = true;
+    scanBtn.replaceChildren();
+    const spinner = document.createElement('span');
+    spinner.className = 'spinner';
+    scanBtn.append(spinner, document.createTextNode(' Scanning…'));
+
+    const t0 = performance.now();
+
+    try {
+      // NER analyzer (lazy init)
+      if (!nerAnalyzer) {
+        const nlpEngine = new TransformersNlpEngine({ quantized: true });
+        nerAnalyzer = new AnalyzerEngine({ nlpEngine });
+      }
+
+      const entities = enabledEntities.size > 0 ? [...enabledEntities] : undefined;
+      const results = await nerAnalyzer.analyze(text, { entities });
+
+      // Also run regex-only pass and merge non-overlapping findings (unchecked)
+      let regexExtras = [];
+      const regexResults = await regexAnalyzer.analyze(text, { entities });
+      for (const rr of regexResults) {
+        const overlaps = results.some(nr =>
+          nr.start < rr.end && rr.start < nr.end
+        );
+        if (!overlaps) {
+          regexExtras.push(rr);
+        }
+      }
+
+      const allResults = [...results, ...regexExtras];
+      const anon = await anonymizer.anonymize(text, results);
+      const elapsed = Math.round(performance.now() - t0);
+      lastText = text;
+      lastResults = allResults;
+      lastAnon = anon;
+      lastElapsed = elapsed;
+      excludedSet.clear();
+      for (const rr of regexExtras) {
+        excludedSet.add(displayKey(rr, text));
+      }
+      renderResults(text, allResults, anon, elapsed, confidenceSlider.value / 100);
+    } catch (err) {
+      console.error(err);
+      const msg = err instanceof Error ? err.message : String(err);
+      alert('Error: ' + msg);
+    } finally {
+      scanBtn.disabled = false;
+      scanBtn.replaceChildren(document.createTextNode('Scan for PII →'));
+    }
+  });
+
+  confidenceSlider.addEventListener('input', () => {
+    confidenceValue.textContent = confidenceSlider.value + '%';
+    rerender();
+  });
+
+  const inputText = document.getElementById('inputText');
+  const inputPanelBody = document.getElementById('inputPanelBody');
+
+  function showHighlightedView(text, active) {
+    const existing = document.getElementById('highlightedView');
+    if (existing) existing.remove();
+    const oldBtn = inputPanelBody.querySelector('.edit-btn');
+    if (oldBtn) oldBtn.remove();
+
+    const div = document.createElement('div');
+    div.className = 'highlighted-view';
+    div.id = 'highlightedView';
+
+    let cursor = 0;
+    const sorted = [...active].sort((a, b) => a.start - b.start);
+    for (const r of sorted) {
+      if (r.start > cursor) div.appendChild(document.createTextNode(text.slice(cursor, r.start)));
+      const span = document.createElement('span');
+      span.className = 'pii-hl';
+      span.dataset.type = r.entityType;
+      span.dataset.dk = displayKey(r, text);
+      span.textContent = text.slice(r.start, r.end);
+      span.addEventListener('mouseenter', () => {
+        document.querySelectorAll('.entity-item[data-dk="' + CSS.escape(span.dataset.dk) + '"]')
+          .forEach(el => el.classList.add('hover'));
+      });
+      span.addEventListener('mouseleave', () => {
+        document.querySelectorAll('.entity-item.hover').forEach(el => el.classList.remove('hover'));
+      });
+      div.appendChild(span);
+      cursor = r.end;
+    }
+    if (cursor < text.length) div.appendChild(document.createTextNode(text.slice(cursor)));
+
+    const editBtn = document.createElement('button');
+    editBtn.className = 'edit-btn';
+    editBtn.textContent = 'Edit';
+    editBtn.addEventListener('click', switchToEdit);
+
+    inputText.style.display = 'none';
+    inputPanelBody.appendChild(div);
+    inputPanelBody.appendChild(editBtn);
+  }
+
+  function switchToEdit() {
+    const hlView = document.getElementById('highlightedView');
+    if (hlView) hlView.remove();
+    const editBtn = inputPanelBody.querySelector('.edit-btn');
+    if (editBtn) editBtn.remove();
+    inputText.style.display = '';
+    inputText.focus();
+    lastResults = [];
+    lastText = '';
+    excludedSet.clear();
+    document.getElementById('resultsWrapper').classList.remove('visible');
+    document.getElementById('entityList').replaceChildren(
+      Object.assign(document.createElement('li'), { className: 'empty-state', textContent: 'Run a scan to detect PII' })
+    );
+    document.getElementById('entityCount').textContent = '0';
+    document.getElementById('anonOutput').replaceChildren();
+  }
+
+  // Selection popup for manual entity tagging
+  const selectPopup = document.getElementById('selectPopup');
+  const POPUP_TYPES = [
+    'PERSON', 'ORGANIZATION', 'LOCATION', 'DATE_TIME',
+    'PHONE_NUMBER', 'EMAIL_ADDRESS', 'IBAN_CODE', 'CREDIT_CARD',
+    'PASSPORT', 'NATIONAL_ID', 'NATIONALITY', 'IP_ADDRESS', 'URL',
+    'CH_AHV', 'CH_UID', 'OTHER',
+  ];
+
+  let pendingSelection = null;
+
+  function hidePopup() {
+    selectPopup.classList.remove('open');
+    pendingSelection = null;
+  }
+
+  function showPopup(rect) {
+    selectPopup.replaceChildren();
+    const label = document.createElement('span');
+    label.className = 'popup-label';
+    label.textContent = 'Tag as entity:';
+    selectPopup.appendChild(label);
+
+    for (const type of POPUP_TYPES) {
+      if (!enabledEntities.has(type)) continue;
+      const btn = document.createElement('button');
+      btn.className = 'popup-type-btn';
+      btn.textContent = type;
+      btn.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        if (!pendingSelection) return;
+        addManualEntity(pendingSelection.text, pendingSelection.start, pendingSelection.end, type);
+        hidePopup();
+      });
+      selectPopup.appendChild(btn);
+    }
+
+    const popupW = 340;
+    let left = rect.left + rect.width / 2 - popupW / 2;
+    left = Math.max(8, Math.min(left, window.innerWidth - popupW - 8));
+    selectPopup.style.left = left + 'px';
+    selectPopup.style.top = (rect.top - 8) + 'px';
+    selectPopup.style.transform = 'translateY(-100%)';
+    selectPopup.classList.add('open');
+  }
+
+  function addManualEntity(selectedText, start, end, entityType) {
+    const manualResult = { entityType, start, end, score: 1.0, recognizerName: 'Manual' };
+    lastResults.push(manualResult);
+    if (!lastText) lastText = inputText.value;
+    rerender();
+    document.getElementById('resultsWrapper').classList.add('visible');
+  }
+
+  inputPanelBody.addEventListener('mouseup', () => {
+    const hlView = document.getElementById('highlightedView');
+    if (!hlView) return;
+
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || sel.rangeCount === 0) { hidePopup(); return; }
+
+    const selectedText = sel.toString();
+    if (!selectedText.trim()) { hidePopup(); return; }
+
+    const range = sel.getRangeAt(0);
+    const rect = range.getBoundingClientRect();
+
+    function getOffset(container, node, offset) {
+      let chars = 0;
+      const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+      while (walker.nextNode()) {
+        if (walker.currentNode === node) return chars + offset;
+        chars += walker.currentNode.length;
+      }
+      return chars;
+    }
+    const start = getOffset(hlView, range.startContainer, range.startOffset);
+    const end = getOffset(hlView, range.endContainer, range.endOffset);
+    if (start === end) { hidePopup(); return; }
+
+    pendingSelection = { text: lastText.slice(start, end), start, end };
+    showPopup(rect);
+  });
+
+  document.addEventListener('mousedown', (e) => {
+    if (!selectPopup.contains(e.target) && !inputPanelBody.contains(e.target)) {
+      hidePopup();
+    }
+  });
+
+  window.addEventListener('scroll', hidePopup, true);
+  window.addEventListener('resize', hidePopup);
+
+  // ── Deanonymize mode ──
+  const deanonBtn = document.getElementById('deanonBtn');
+  const backBtn = document.getElementById('backBtn');
+  let savedScanState = null;
+
+  deanonBtn.addEventListener('click', () => {
+    if (!window.__piiMapping || Object.keys(window.__piiMapping).length === 0) {
+      alert('Run a scan first to build the entity mapping.');
+      return;
+    }
+
+    const inputPanel = document.querySelector('.three-col .panel:nth-child(1)');
+    const entityPanel = document.querySelector('.three-col .panel:nth-child(2)');
+    const anonPanel = document.querySelector('.three-col .panel:nth-child(3)');
+    savedScanState = {
+      inputBody: inputPanelBody.innerHTML,
+      inputDisplay: inputText.style.display,
+      entityBody: entityPanel.querySelector('.panel-body').innerHTML,
+      entityHeader: entityPanel.querySelector('.panel-header').innerHTML,
+      anonBody: anonPanel.querySelector('.panel-body').innerHTML,
+    };
+
+    deanonBtn.style.display = 'none';
+    backBtn.style.display = 'inline-flex';
+    scanBtn.style.display = 'none';
+    document.getElementById('settingsBtn').style.display = 'none';
+    document.querySelector('.confidence-slider-wrap').style.display = 'none';
+
+    const inputHeader = inputPanel.querySelector('.panel-header');
+    inputHeader.textContent = 'Paste LLM Response';
+    inputPanelBody.replaceChildren();
+    const deanonTextarea = document.createElement('textarea');
+    deanonTextarea.id = 'deanonInput';
+    deanonTextarea.placeholder = 'Paste text containing <PERSON_1>, <LOCATION_2>, etc.';
+    deanonTextarea.style.cssText = 'width:100%;height:100%;padding:1rem;font-family:var(--mono);font-size:0.9rem;line-height:1.7;border:none;resize:none;outline:none;background:white;color:var(--ink);';
+    inputPanelBody.appendChild(deanonTextarea);
+
+    entityPanel.querySelector('.panel-header').innerHTML = '<span>Entity Mapping</span>';
+    const epBody = entityPanel.querySelector('.panel-body');
+    epBody.replaceChildren();
+    const mapList = document.createElement('ul');
+    mapList.className = 'entity-list';
+    mapList.style.fontSize = '0.88rem';
+    for (const [id, orig] of Object.entries(window.__piiMapping)) {
+      const li = document.createElement('li');
+      li.style.cssText = 'padding:0.5rem 0;border-bottom:1px solid #0a0a0a0a;display:flex;gap:0.5rem;align-items:center;';
+      const tag = document.createElement('span');
+      tag.className = 'redacted';
+      tag.style.fontSize = '0.78rem';
+      tag.textContent = '<' + id + '>';
+      const arrow = document.createTextNode(' → ');
+      const val = document.createElement('span');
+      val.style.fontWeight = '500';
+      val.textContent = orig;
+      li.append(tag, arrow, val);
+      mapList.appendChild(li);
+    }
+    epBody.appendChild(mapList);
+
+    anonPanel.querySelector('.panel-header').innerHTML = 'Restored Output <button class="copy-btn" id="copyRestored" title="Copy restored text">📋 Copy</button>';
+    document.getElementById('copyRestored').addEventListener('click', () => {
+      const t = document.getElementById('deanonOutput')?.textContent || '';
+      navigator.clipboard.writeText(t).then(() => {
+        const btn = document.getElementById('copyRestored');
+        const orig = btn.textContent;
+        btn.textContent = '✓ Copied';
+        setTimeout(() => btn.textContent = orig, 1500);
+      });
+    });
+    const anonBody = anonPanel.querySelector('.panel-body');
+    anonBody.replaceChildren();
+    const restoredDiv = document.createElement('div');
+    restoredDiv.className = 'deanon-output';
+    restoredDiv.id = 'deanonOutput';
+    anonBody.appendChild(restoredDiv);
+
+    deanonTextarea.addEventListener('input', () => {
+      renderDeanonymized(deanonTextarea.value);
+    });
+    deanonTextarea.focus();
+  });
+
+  function renderDeanonymized(text) {
+    const out = document.getElementById('deanonOutput');
+    if (!out) return;
+    out.replaceChildren();
+    if (!text) return;
+
+    const mapping = window.__piiMapping || {};
+    const keys = Object.keys(mapping);
+    if (keys.length === 0) {
+      out.appendChild(document.createTextNode(text));
+      return;
+    }
+    const pattern = new RegExp('<(' + keys.map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')>', 'g');
+    let cursor = 0;
+    let m;
+    while ((m = pattern.exec(text)) !== null) {
+      if (m.index > cursor) out.appendChild(document.createTextNode(text.slice(cursor, m.index)));
+      const span = document.createElement('span');
+      span.className = 'restored';
+      span.textContent = mapping[m[1]];
+      span.title = '<' + m[1] + '>';
+      out.appendChild(span);
+      cursor = m.index + m[0].length;
+    }
+    if (cursor < text.length) out.appendChild(document.createTextNode(text.slice(cursor)));
+  }
+
+  backBtn.addEventListener('click', () => {
+    if (!savedScanState) return;
+
+    deanonBtn.style.display = '';
+    backBtn.style.display = 'none';
+    scanBtn.style.display = '';
+    document.getElementById('settingsBtn').style.display = '';
+    document.querySelector('.confidence-slider-wrap').style.display = '';
+
+    const inputPanel = document.querySelector('.three-col .panel:nth-child(1)');
+    const entityPanel = document.querySelector('.three-col .panel:nth-child(2)');
+    const anonPanel = document.querySelector('.three-col .panel:nth-child(3)');
+
+    inputPanel.querySelector('.panel-header').textContent = 'Input Text';
+    inputPanelBody.innerHTML = savedScanState.inputBody;
+    const ta = document.getElementById('inputText');
+    if (ta) ta.style.display = savedScanState.inputDisplay;
+
+    entityPanel.querySelector('.panel-header').innerHTML = savedScanState.entityHeader;
+    entityPanel.querySelector('.panel-body').innerHTML = savedScanState.entityBody;
+
+    anonPanel.querySelector('.panel-header').innerHTML = 'Anonymized Output\n        <button class="copy-btn" id="copyAnon" title="Copy anonymized text">📋 Copy</button>';
+    anonPanel.querySelector('.panel-body').innerHTML = savedScanState.anonBody;
+
+    document.getElementById('copyAnon')?.addEventListener('click', () => {
+      const anonEl = document.getElementById('anonOutput');
+      const t = anonEl?.textContent || '';
+      navigator.clipboard.writeText(t).then(() => {
+        const btn = document.getElementById('copyAnon');
+        const orig = btn.textContent;
+        btn.textContent = '✓ Copied';
+        setTimeout(() => btn.textContent = orig, 1500);
+      });
+    });
+
+    savedScanState = null;
+  });
+</script>
+
+</body>
+</html>
