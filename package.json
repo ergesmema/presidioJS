@@ -1,0 +1,50 @@
+{
+  "name": "presidio-js",
+  "version": "0.1.0",
+  "description": "Browser-native PII detection and anonymization, inspired by Microsoft Presidio",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./nlp": {
+      "types": "./dist/nlp.d.ts",
+      "import": "./dist/nlp.js",
+      "require": "./dist/nlp.cjs"
+    },
+    "./anonymizer": {
+      "types": "./dist/anonymizer.d.ts",
+      "import": "./dist/anonymizer.js",
+      "require": "./dist/anonymizer.cjs"
+    }
+  },
+  "sideEffects": false,
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "@huggingface/transformers": ">=3.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@huggingface/transformers": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@huggingface/transformers": "^3.4.0",
+    "tsup": "^8.4.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  },
+  "keywords": ["pii", "presidio", "anonymization", "privacy", "ner", "browser", "webgl"],
+  "license": "MIT"
+}
